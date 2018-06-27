@@ -12,9 +12,10 @@ main = do
     credsM <- loadTwilioCreds
     case credsM of
         Just creds -> void $ runTwilioM creds $ do
-                 createUser "kp-7@minio.io"
+                 createUser "someone@nowhere.org"
                  users <- listUsers
                  print users
+                 createChannel "general"
                  ch <- listChannels
                  print ch
 

@@ -1,12 +1,13 @@
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE TupleSections              #-}
 
 module Twilio.Types where
 
 import           Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
-import           Data.Aeson                (FromJSON, Value, parseJSON,
-                                            withObject, (.:))
+import           Data.Aeson                (FromJSON, ToJSON, Value, encode,
+                                            parseJSON, withObject, (.:))
 import qualified Data.Text                 as T
 import           Data.Time                 (UTCTime)
 import qualified Network.HTTP.Conduit      as NC
@@ -59,7 +60,6 @@ mkTwilioPostReq apiPath params = do
     TwilioCreds accId tok sid <- ask
     let resource = toS $ T.intercalate "/"
                    $ [twilioBaseAPI, sid, apiPath]
-
     return $ H.setRequestMethod HT.methodPost
       $ H.setRequestBasicAuth (toS accId) (toS tok)
       $ H.setRequestPath resource
@@ -131,13 +131,46 @@ data TwilioUserReq = TwilioUserReq
                      , turFriendlyName :: Maybe Text
                      } deriving (Eq, Show)
 
+data TwilioChannelReq = TwilioChannelReq
+                        { tcrCreatedBy    :: Maybe Text
+                        , tcrDateCreated  :: Maybe UTCTime
+                        , tcrDateUpdated  :: Maybe UTCTime
+                        , tcrFriendlyName :: Maybe Text
+                        , tcrUniqueName   :: Maybe Text
+                        } deriving (Eq, Show)
+
+defaultChannelReq :: TwilioChannelReq
+defaultChannelReq = TwilioChannelReq Nothing Nothing Nothing Nothing Nothing
+
 class ToUrlEncoded a where
     toUrlEncode :: a -> [(ByteString, ByteString)]
 
 instance ToUrlEncoded TwilioUserReq where
-    toUrlEncode v = [ ("Identity", toS $ turIdentity v) ]
-                    ++ maybe [] (\role -> [("RoleSid", toS role )]) (turRoleSid v)
-                    ++ maybe [] (\fname -> [("FriendlyName", toS fname )]) (turFriendlyName v)
+    toUrlEncode v = catMaybes
+                    $ [ encodeTextField "Identity" (Just . turIdentity)
+                      , encodeTextField "RoleSid" turRoleSid
+                      , encodeTextField "FriendlyName" turFriendlyName
+                      ]
+                    <*> [v]
+
+
+instance ToUrlEncoded TwilioChannelReq where
+    toUrlEncode v = catMaybes
+                    $ [ encodeTextField "CreatedBy" tcrCreatedBy
+                      , encodeValueField "DateCreated" tcrDateCreated
+                      , encodeValueField "DateUpdated" tcrDateUpdated
+                      , encodeTextField "FriendlyName" tcrFriendlyName
+                      , encodeTextField "UniqueName" tcrUniqueName
+                      ]
+                    <*> [v]
+
+
+encodeValueField :: (ToJSON b) => ByteString -> (a -> Maybe b) -> a
+                 -> Maybe (ByteString, ByteString)
+encodeValueField k vf = (fmap ((k,) . toS . encode)) . vf
+encodeTextField :: ByteString -> (a -> Maybe Text) -> a
+                -> Maybe (ByteString, ByteString)
+encodeTextField k tf = (fmap ((k,) . toS)) . tf
 
 data TwilioMeta = TwilioMeta
                   { tmNextPgUrl :: Maybe Text

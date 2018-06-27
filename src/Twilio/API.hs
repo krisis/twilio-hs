@@ -35,3 +35,11 @@ createUser userName = do
     req <- mkTwilioPostReq "Users" user
     rsp <- H.httpJSON req
     return $ H.getResponseBody rsp
+
+
+createChannel :: Text -> TwilioM TwilioChannel
+createChannel channelName = do
+    let channel = defaultChannelReq { tcrFriendlyName = Just channelName}
+    req <- mkTwilioPostReq "Channels" channel
+    rsp <- H.httpJSON req
+    return $ H.getResponseBody rsp
